@@ -31,7 +31,7 @@ def handle_message(update, context):
     update.message.reply_text(reply)
     save_message(user_id, "assistant", reply)
 
-    # 5. EXTRA: auto-learning (kijken of dit bericht iets bevat dat moet worden onthouden)
+    # 5. EXTRA: auto-learning (zonder memory-role)
     memory_check = client.chat.completions.create(
         model="gpt-4",
         messages=[
@@ -43,7 +43,8 @@ def handle_message(update, context):
     memory_output = memory_check.choices[0].message.content.strip()
 
     if "niets" not in memory_output.lower():
-        save_message(user_id, "memory", memory_output)
+        # Rol = user, maar markering [GEHEUGEN]
+        save_message(user_id, "user", f"[GEHEUGEN] {memory_output}")
         print(f"🧠 Opgeslagen in geheugen: {memory_output}")
     else:
         print("⛔ Geen relevante info om op te slaan.")
