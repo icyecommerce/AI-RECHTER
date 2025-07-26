@@ -1,22 +1,17 @@
 import os
-import logging
-import openai
-from telegram import Update, Bot
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 from memory import save_message, load_conversation
+from openai import OpenAI
 
-# Logging aan (optioneel voor debugging op Render)
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# OpenAI Key
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# /start command
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Yo, ik ben AI Rechter. Wat wil je fixen vandaag?")
 
-# Start commando
-def start(update: Update, context: CallbackContext):
-    update.message.reply_text("Yo, ik ben AI Rechter 2.0. Wat wil je fixen vandaag?")
-
-# Normale berichten
-def handle_message(update: Update, context: CallbackContext):
+# gewone berichten
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_message = update.message.text
     user_id = str(update.effective_user.id)
 
@@ -24,27 +19,21 @@ def handle_message(update: Update, context: CallbackContext):
     convo = load_conversation(user_id)
     messages = [{"role": "system", "content": open("prompt.txt").read()}] + convo
 
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model="gpt-4",
         messages=messages
     )
 
     reply = response.choices[0].message.content.strip()
     save_message(user_id, "assistant", reply)
-    update.message.reply_text(reply)
+    await update.message.reply_text(reply)
 
-# Main bot starter
 def main():
-    token = os.getenv("TELEGRAM_TOKEN")
-    updater = Updater(token, use_context=True)
-    dp = updater.dispatcher
-
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
-
+    app = ApplicationBuilder().token(os.getenv("TELEGRAM_TOKEN")).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     print("AI Rechter is live 🔥")
-    updater.start_polling()
-    updater.idle()
+    app.run_polling()
 
 if __name__ == "__main__":
     main()
