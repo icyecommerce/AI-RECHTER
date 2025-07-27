@@ -1,16 +1,12 @@
 import os
 import json
 from datetime import datetime
-from supabase import create_client
+import requests
 
-# 🔐 Supabase config
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-supabase = None
-if SUPABASE_URL and SUPABASE_KEY:
-    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+USE_SUPABASE = SUPABASE_URL and SUPABASE_KEY
 
-# 🗂️ JSON fallback folder
 DATA_FOLDER = "data"
 os.makedirs(DATA_FOLDER, exist_ok=True)
 
@@ -18,19 +14,36 @@ def get_user_file(user_id):
     return os.path.join(DATA_FOLDER, f"{user_id}.json")
 
 def save_message(user_id, role, content):
-    # 1. 🔁 Probeer Supabase
-    if supabase:
+    if USE_SUPABASE:
         try:
-            supabase.table("memory").insert({
+            payload = {
                 "user_id": user_id,
                 "role": role,
                 "message": content,
-                "timestamp": datetime.utcnow()
-            }).execute()
-        except Exception as e:
-            print(f"⚠️ Supabase fout: {e} — fallback naar JSON")
+                "timestamp": datetime.now().isoformat()  # 🔧 FIXED: string ipv datetime
+            }
 
-    # 2. 💾 Ook lokaal opslaan (fallback)
+            res = requests.post(
+                f"{SUPABASE_URL}/rest/v1/memory",  # ✅ let op: kleine letters 'memory'
+                headers={
+                    "apikey": SUPABASE_KEY,
+                    "Authorization": f"Bearer {SUPABASE_KEY}",
+                    "Content-Type": "application/json",
+                    "Prefer": "return=minimal"
+                },
+                json=payload
+            )
+
+            if res.status_code >= 300:
+                print("⚠️ Supabase fout:", res.json(), "— fallback naar JSON")
+                save_message_local(user_id, role, content)
+        except Exception as e:
+            print("⚠️ Supabase exception:", str(e), "— fallback naar JSON")
+            save_message_local(user_id, role, content)
+    else:
+        save_message_local(user_id, role, content)
+
+def save_message_local(user_id, role, content):
     filepath = get_user_file(user_id)
     convo = load_conversation(user_id)
     convo.append({"role": role, "content": content})
@@ -38,20 +51,6 @@ def save_message(user_id, role, content):
         json.dump(convo, f)
 
 def load_conversation(user_id):
-    # 1. 📡 Probeer uit Supabase
-    if supabase:
-        try:
-            response = supabase.table("memory") \
-                .select("*") \
-                .eq("user_id", user_id) \
-                .order("timestamp", desc=False) \
-                .execute()
-            if response.data:
-                return [{"role": r["role"], "content": r["message"]} for r in response.data]
-        except Exception as e:
-            print(f"⚠️ Supabase fout: {e} — fallback naar JSON")
-
-    # 2. 📁 Laad lokaal bestand
     filepath = get_user_file(user_id)
     if not os.path.exists(filepath):
         return []
