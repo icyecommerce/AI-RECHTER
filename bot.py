@@ -17,7 +17,10 @@ def handle_message(update, context):
     save_message(user_id, "user", user_message)
 
     # 2. Load full convo
-    convo = load_conversation(user_id)
+    convo = [
+    msg for msg in load_conversation(user_id)
+    if "[GEHEUGEN]" not in msg["content"]
+]
     messages = [{"role": "system", "content": open("prompt.txt").read()}] + convo
 
     # 3. Laat AI Rechter reageren
