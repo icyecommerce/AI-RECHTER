@@ -13,14 +13,15 @@ def handle_message(update, context):
     user_message = update.message.text
     user_id = str(update.effective_user.id)
 
-    # 1. Save user message
-    save_message(user_id, "user", user_message)
+    # 1. Alleen lange user berichten opslaan
+    if len(user_message.strip()) > 10:
+        save_message(user_id, "user", user_message)
 
-    # 2. Load full convo
+    # 2. Laad convo, zonder geheugenregels
     convo = [
-    msg for msg in load_conversation(user_id)
-    if "[GEHEUGEN]" not in msg["content"]
-]
+        msg for msg in load_conversation(user_id)
+        if "(GEHEUGEN):" not in msg["content"]
+    ]
     messages = [{"role": "system", "content": open("prompt.txt").read()}] + convo
 
     # 3. Laat AI Rechter reageren
@@ -34,11 +35,14 @@ def handle_message(update, context):
     update.message.reply_text(reply)
     save_message(user_id, "assistant", reply)
 
-    # 5. EXTRA: auto-learning check
+    # 5. Auto-learning: check of er iets te onthouden is
     memory_check = client.chat.completions.create(
         model="gpt-4",
         messages=[
-            {"role": "system", "content": "Analyseer dit bericht. Bevat het nuttige info over wie de gebruiker is, wat hij doet, zijn doelen of samenwerkingen? Als ja, vat het dan samen in 1 korte zin. Als nee, zeg dan letterlijk: 'niets'."},
+            {
+                "role": "system",
+                "content": "Analyseer dit bericht. Bevat het nuttige info over wie de gebruiker is, wat hij doet, zijn doelen of samenwerkingen? Als ja, vat het dan samen in 1 korte zin. Als nee, zeg dan letterlijk: 'niets'."
+            },
             {"role": "user", "content": user_message}
         ]
     )
@@ -46,7 +50,6 @@ def handle_message(update, context):
     memory_output = memory_check.choices[0].message.content.strip()
 
     if "niets" not in memory_output.lower():
-        # Supabase accepteert alleen geldige rollen zoals 'system'
         save_message(user_id, "system", f"(GEHEUGEN): {memory_output}")
         print(f"🧠 Opgeslagen in geheugen: {memory_output}")
     else:
