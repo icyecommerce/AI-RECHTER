@@ -22,20 +22,25 @@ def handle_message(update, context):
         msg for msg in load_conversation(user_id)
         if "(GEHEUGEN):" not in msg["content"]
     ]
+
+    # 3. Neem alleen de laatste 6 berichten mee
+    convo = convo[-10:]
+
+    # 4. Zet prompt + convo klaar
     messages = [{"role": "system", "content": open("prompt.txt").read()}] + convo
 
-    # 3. Laat AI Rechter reageren
+    # 5. Laat AI Rechter reageren
     response = client.chat.completions.create(
         model="gpt-4",
         messages=messages
     )
     reply = response.choices[0].message.content.strip()
 
-    # 4. Stuur reactie terug & sla op
+    # 6. Stuur reactie terug & sla op
     update.message.reply_text(reply)
     save_message(user_id, "assistant", reply)
 
-    # 5. Auto-learning: check of er iets te onthouden is
+    # 7. Auto-learning: check of er iets te onthouden is
     memory_check = client.chat.completions.create(
         model="gpt-4",
         messages=[
