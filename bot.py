@@ -19,26 +19,28 @@ def handle_message(update, context):
     else:
         print("⛔ Bericht te kort, wordt genegeerd voor opslag & AI")
 
-    # 2. Laad alleen laatste 6 berichten excl. geheugen
-    convo = [
+    # 2. Laad geheugenregels uit Supabase/JSON
+    memory = [
         msg for msg in load_conversation(user_id)
-        if "(GEHEUGEN):" not in msg["content"]
-    ][-6:]
+        if "(GEHEUGEN):" in msg["content"]
+    ]
 
-    messages = [{"role": "system", "content": open("prompt.txt").read()}] + convo
+    # 3. Zet prompt + geheugen + actuele user vraag
+    messages = [{"role": "system", "content": open("prompt.txt").read()}] + memory
+    messages.append({"role": "user", "content": user_message})
 
-    # 3. Laat AI Rechter reageren
+    # 4. Laat AI Rechter reageren
     response = client.chat.completions.create(
         model="gpt-4",
         messages=messages
     )
     reply = response.choices[0].message.content.strip()
 
-    # 4. Stuur antwoord terug
+    # 5. Stuur antwoord terug
     update.message.reply_text(reply)
     save_message(user_id, "assistant", reply)
 
-    # 5. Auto-learning enkel als bericht lang genoeg is
+    # 6. Auto-learning (alleen als bericht lang genoeg is)
     if len(user_message) > 10:
         memory_check = client.chat.completions.create(
             model="gpt-4",
