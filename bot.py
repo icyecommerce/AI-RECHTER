@@ -13,20 +13,25 @@ def handle_message(update, context):
     user_message = update.message.text.strip()
     user_id = str(update.effective_user.id)
 
-    # 1. Alleen langere berichten opslaan
     if len(user_message) > 10:
         save_message(user_id, "user", user_message)
     else:
         print("⛔ Bericht te kort, wordt genegeerd voor opslag & AI")
 
-    # 2. Laad geheugenregels uit Supabase/JSON
+    # 1. Haal geheugenregels op
     memory = [
         msg for msg in load_conversation(user_id)
         if "(GEHEUGEN):" in msg["content"]
     ]
 
-    # 3. Zet prompt + geheugen + actuele user vraag
-    messages = [{"role": "system", "content": open("prompt.txt").read()}] + memory
+    # 2. Haal laatste 6 echte berichten (zonder geheugenregels)
+    convo = [
+        msg for msg in load_conversation(user_id)
+        if "(GEHEUGEN):" not in msg["content"]
+    ][-6:]
+
+    # 3. Combineer prompt + geheugen + context
+    messages = [{"role": "system", "content": open("prompt.txt").read()}] + memory + convo
     messages.append({"role": "user", "content": user_message})
 
     # 4. Laat AI Rechter reageren
@@ -40,7 +45,7 @@ def handle_message(update, context):
     update.message.reply_text(reply)
     save_message(user_id, "assistant", reply)
 
-    # 6. Auto-learning (alleen als bericht lang genoeg is)
+    # 6. Auto-learning
     if len(user_message) > 10:
         memory_check = client.chat.completions.create(
             model="gpt-4",
@@ -52,7 +57,6 @@ def handle_message(update, context):
                 {"role": "user", "content": user_message}
             ]
         )
-
         memory_output = memory_check.choices[0].message.content.strip()
 
         if "niets" not in memory_output.lower():
@@ -60,6 +64,7 @@ def handle_message(update, context):
             print(f"🧠 Opgeslagen in geheugen: {memory_output}")
         else:
             print("⛔ Geen relevante info om op te slaan.")
+
 
 def main():
     updater = Updater(token=os.getenv("TELEGRAM_TOKEN"), use_context=True)
